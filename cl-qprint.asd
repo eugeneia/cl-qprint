@@ -28,9 +28,7 @@
 (defsystem :cl-qprint
   :name "CL-QPRINT"
   :author "Robert Marlow <rob@bobturf.org>"
-  :version "0.2.0"
+  :version "1.0.0-rc"
   :maintainer "Robert Marlow <rob@bobturf.org>"
-  :serial t
-  :components
-  ((:file "base"))
-  :depends-on ("babel"))
+  :components ((:file "base"))
+  :depends-on ("flexi-streams"))
