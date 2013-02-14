@@ -32,4 +32,5 @@
   :maintainer "Robert Marlow <rob@bobturf.org>"
   :serial t
   :components
-  ((:file "base")))
+  ((:file "base"))
+  :depends-on ("babel"))
