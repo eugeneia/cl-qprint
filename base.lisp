@@ -121,7 +121,7 @@ encoded string."
 	 ;; ws on the end of a line must be encoded
 	   (when ws
 	     (if (= byte *ascii-newline*)
-		 (format out "=~2,'0X" (char-code-ascii ws))
+		 (format out "=~2,'0X" ws)
 		 (write-char (code-char-ascii ws) out)))
 
 	   (cond
