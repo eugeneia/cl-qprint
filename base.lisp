@@ -59,7 +59,7 @@ encoding from INPUT and produces the equivalent
 			(unless (or (eql char3 'eof)
 				    (and (char= char3 #\linefeed)
 					 (char= char2 #\return)))
-			  (write-byte (char-code-ascii char3) out)))
+			  (unread-char char3 in)))
 		      ;; If not a newline the = indicates encoding
 		      (write-byte
 		       (decode-byte char2 (read-char in))
