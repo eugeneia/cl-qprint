@@ -31,7 +31,11 @@
      finally (return t)))
 
 (defun test-cl-qprint ()
-  "Test integritiy of CL-QPRINT by throwing random data at it."
+  "Test integritiy of CL-QPRINT by asserting the following to be true:
+
+{(DECODE (ENCODE input)) ⇒ input}
+
+for {input} being randomized data."
   (loop for i from 0 to *test-iterations*
      for vector = (random-vector i)
      for digested-vector = (decode (encode vector) :error-p t)
