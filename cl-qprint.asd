@@ -18,8 +18,6 @@
 ;;;; Boston, MA  02111-1307, USA.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-
-
 (defpackage :cl-qprint-system
   (:use :asdf :cl))
 
@@ -27,8 +25,9 @@
 
 (defsystem :cl-qprint
   :name "CL-QPRINT"
+  :description "Encode and decode quoted-printable encoded strings."
   :author "Robert Marlow <rob@bobturf.org>"
   :version "1.0.0-rc"
-  :maintainer "Robert Marlow <rob@bobturf.org>"
+  :maintainer "Max Rottenkolber <max@mr.gy>"
   :components ((:file "base"))
   :depends-on ("flexi-streams"))
