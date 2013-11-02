@@ -20,12 +20,14 @@
 
 (defpackage cl-qprint
   (:documentation
-   "Encode/decode quoted-printable.")
+   "Encode and decode quoted-printable encoded strings.")
   (:use :cl
 	:flexi-streams)
-  (:nicknames :qprint)
+  (:nicknames :qprint
+              :quoted-printable)
   (:export :encode
-	   :decode))
+	   :decode
+           :decode-error))
 
 (in-package :cl-qprint)
 
@@ -34,50 +36,12 @@
   (let ((string (make-string 1 :initial-element char)))
     (aref (string-to-octets string :external-format :ascii) 0)))
 
-(defun decode-byte (character-1 character-2)
-  "Decode byte encoded by CHARACTER-1 and CHARACTER-2."
-  (parse-integer (format nil "~C~C" character-1 character-2)
-		 :radix 16))
-
-(defun decode (input)
-  "INPUT must be a STRING or a character STREAM. Reads quoted-printable
-encoding from INPUT and produces the equivalent
-{(VECTOR (UNSIGNED-BYTE 8))}."
-  (let ((in (etypecase input
-	      (string (make-string-input-stream input))
-	      (stream input))))
-    (with-output-to-sequence (out :element-type '(unsigned-byte 8))
-      (loop for char = (read-char in nil 'eof)
-	 while (not (eq char 'eof))
-	 do (if (char= char #\=)
-		(let ((char2 (read-char in)))
-		  ;; Check for and convert all newlines (LF or CRLF)
-		  ;; to nothing. The = indicates a soft line break.
-		  (if (member char2 '(#\return #\linefeed)
-			      :test #'char=)
-		      (let ((char3 (read-char in nil 'eof)))
-			(unless (or (eql char3 'eof)
-				    (and (char= char3 #\linefeed)
-					 (char= char2 #\return)))
-			  (unread-char char3 in)))
-		      ;; If not a newline the = indicates encoding
-		      (write-byte
-		       (decode-byte char2 (read-char in))
-		       out)))
-		(write-byte (char-code-ascii char) out))))))
-
-(defun cr-lf (stream)
-  "Prints a CRLF sequence to STREAM. RFC 2045 mandates CRLF for newlines"
-  (write-char #\return stream)
-  (write-char #\linefeed stream))
-
 (defun code-char-ascii (code)
   "Return ASCII character for CODE."
   (let ((buffer (make-array 1
 			    :element-type '(unsigned-byte 8)
 			    :initial-element code)))
     (aref (octets-to-string buffer :external-format :ascii) 0)))
-			    
 
 (defparameter *ascii-!* (char-code-ascii #\!)
   "ASCII code for exclamation mark character.")
@@ -88,65 +52,121 @@ encoding from INPUT and produces the equivalent
 (defparameter *ascii-=* (char-code-ascii #\=)
   "ASCII code for equal sign character.")
 
-(defparameter *ascii-newline* (char-code-ascii #\Newline)
-  "ASCII code for newline character.")
+(defparameter *ascii-whitespace* (list (char-code-ascii #\Space)
+                                       (char-code-ascii #\Tab)
+                                       (char-code-ascii #\Newline)
+                                       (char-code-ascii #\Return))
+  "List of ASCII codes of whitespace characters.")
 
-(defparameter *ascii-space* (char-code-ascii #\Space)
-  "ASCII code for space character.")
+(defun byte-encoding (byte)
+  "Produce quoted-printable encoding string for BYTE."
+  (format nil "=~2,'0X" byte))
 
-(defparameter *ascii-tab* (char-code-ascii #\Tab)
-  "ASCII code for tab character.")
+(defparameter *encoded-crlf*
+  (format nil "~a~a"
+          (byte-encoding (char-code-ascii #\Return))
+          (byte-encoding (char-code-ascii #\Newline)))
+  "CRLF string.")
 
-(defun encode (input &key columns encode-newlines)
-  "INPUT must be either a VECTOR or a STREAM with ELEMENT-TYPE of
-{(UNSIGNED-BYTE 8)}. Reads from INPUT and produces a quoted-printable
-encoded string."
+(defparameter *soft-line-break*
+  (format nil "=~a~a" #\Return #\Newline)
+  "Soft line break.")
+
+(defun upper-case-hex-p (char)
+  "Predicate to check if CHAR is a upper case hexadecimal digit."
+  (find char "0123456789ABCDEF"))
+
+(defun encode-byte-p (byte)
+  "Predicate to check wether BYTE has to be encoded in quoted-printable
+encoding."
+  (or (< byte *ascii-!*)
+      (> byte *ascii-~*)
+      (= byte *ascii-=*)))
+
+(defun encode-byte (byte)
+  "Encode BYTE for quoted-printable encoding and return string."
+  (if (encode-byte-p byte)
+      (byte-encoding byte)
+      (make-string 1 :initial-element (code-char-ascii byte))))
+
+(defun encode (input &key (columns 76))
+  "Reads from INPUT and produces a quoted-printable encoded string. Do
+not exceed line lengths of COLUMNS which defaults to the value
+recommended by RFC2045. Does *not* convert LF to CRLF but encodes all
+whitespace instead to ensure full input integrity. INPUT must be either a
+VECTOR or a STREAM with ELEMENT-TYPE of {(UNSIGNED-BYTE 8)}."
   (let ((in (etypecase input
+              ;; Coerce input type.
 	      (vector (make-in-memory-input-stream input))
-	      (stream input)))
-	(ws nil)
-	(last-line-break 0))
+	      (stream input))))
     (with-output-to-string (out)
       (loop for byte = (read-byte in nil 'eof)
-	    for position = (file-position out)
-	 while (not (eq byte 'eof)) do
+            for position = (file-position out)
+            for last-line-break = 0 then last-line-break
+         while (not (eq byte 'eof)) do
+           (let ((encoded (encode-byte byte)))
+             ;; Line too long?
+             (when (> (+ (- position last-line-break) (length encoded))
+                      columns)
+               ;; Soft line break.
+               (write-string *soft-line-break* out)
+               (setf last-line-break
+                     (+ position 3))) ; +3 because of soft line break.
+             ;; Encoded representation of byte.
+             (write-string encoded out))))))
 
-	 ;; Put in a soft line break if the line's gotten too long
-	   (when (and columns
-		      (>= (- position last-line-break) columns))
-	     (write-char #\= out)
-	     (cr-lf out)
-	     (setf last-line-break position))
+(define-condition decode-error (error) ()
+  (:documentation "Input to DECODE is malformed."))
 
-	 ;; ws on the end of a line must be encoded
-	   (when ws
-	     (if (= byte *ascii-newline*)
-		 (format out "=~2,'0X" ws)
-		 (write-char (code-char-ascii ws) out)))
+(defun decode-byte (char2 char3)
+  "Decode byte encoded by CHAR2 and CHAR2."
+  (parse-integer (format nil "~C~C" char2 char3) :radix 16))
 
-	   (cond
+(defun decode-quoted (char2 char3 &key error-p)
+  "Decode quoted CHAR2 and CHAR3, signal DECODE-ERROR when ERROR-P is non
+NIL and sequence is invalid."
+  (cond
+    ;; A soft line break, do nothing.
+    ((and (eq char2 #\Return)
+          (eq char3 #\Newline))
+     nil)
+    ;; An encoded byte, decode it.
+    ((and (upper-case-hex-p char2)
+          (upper-case-hex-p char3))
+     (decode-byte char2 char3))
+    ;; Otherwise malformed encoding. When ERROR-P is non NIL signal error
+    ;; otherwise do nothing.
+    (error-p (error 'decode-error))))
 
-	     ;; Ensure newlines are CR-LF
-	     ((= byte *ascii-newline*)
-	      (if encode-newlines
-		  (format out "=0D=0A")
-		  (cr-lf out)))
+(defun plain-char-code (char &key error-p)
+  "Return ASCII code for unencoded CHAR if possible otherwise return
+NIL or signal DECODE-ERROR depending on ERROR-P."
+  (let ((code (char-code-ascii char)))
+    (if (and (encode-byte-p code)
+             (not (member code *ascii-whitespace*)))
+        (when error-p
+          (error 'decode-error))
+        code)))
 
-	     ;; Keep track of whitespace in case of following newlines
-	     ((or (= byte *ascii-space*)
-		(= byte *ascii-tab*))
-	      (setf ws byte))
-	
-	     ;; Encode non-printable characters and =
-	     ((or (< byte *ascii-!*)
-		  (> byte *ascii-~*)
-		  (= byte *ascii-=*))
-	      (format out "=~2,'0X" byte))
+(defun decode (input &key error-p)
+  "Reads quoted-printable encoding from INPUT and produces the equivalent
+{(VECTOR (UNSIGNED-BYTE 8))}. Signals condition of type DECODE-ERROR if
+INPUT is malformed and ERROR-P is non NIL. INPUT must be a STRING or a
+character STREAM."
+  (let ((in (etypecase input
+	      (string (make-string-input-stream input))
+	      (stream input))))
+    (with-output-to-sequence (out :element-type '(unsigned-byte 8))
+      (loop for char = (read-char in nil 'eof)
+	 while (not (eq char 'eof))
+	 do (let ((decoded (if (char= char #\=)
+                               ;; Encoded char or soft line break.
+                               (decode-quoted (read-char in nil 'eof)
+                                              (read-char in nil 'eof)
+                                              :error-p error-p)
+                               ;; Non encoded char.
+                               (plain-char-code char
+                                                :error-p error-p))))
+              (when decoded ; Ignore values that ouldn't be decoded.
+                (write-byte decoded out)))))))
 
-	     ;; Else just print the character.
-	     (t (write-char (code-char-ascii byte) out)))
-	   
-	 ;; Keep track of whitespace in case we hit a newline
-	   (unless (or (= byte *ascii-space*)
-		       (= byte *ascii-tab*))
-	     (setf ws nil))))))
