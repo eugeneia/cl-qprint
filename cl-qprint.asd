@@ -29,5 +29,6 @@
   :author "Robert Marlow <rob@bobturf.org>"
   :version "1.0.0-rc"
   :maintainer "Max Rottenkolber <max@mr.gy>"
-  :components ((:file "base"))
+  :components ((:file "base")
+               (:file "test" :depends-on ("base")))
   :depends-on ("flexi-streams"))
