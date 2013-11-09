@@ -159,14 +159,18 @@ character STREAM."
     (with-output-to-sequence (out :element-type '(unsigned-byte 8))
       (loop for char = (read-char in nil 'eof)
 	 while (not (eq char 'eof))
-	 do (let ((decoded (if (char= char #\=)
-                               ;; Encoded char or soft line break.
-                               (decode-quoted (read-char in nil 'eof)
-                                              (read-char in nil 'eof)
-                                              :error-p error-p)
-                               ;; Non encoded char.
-                               (plain-char-code char
-                                                :error-p error-p))))
-              (when decoded ; Ignore values that ouldn't be decoded.
+	 do (let ((decoded
+                   (if (char= char #\=)
+                       ;; Encoded char or soft line break.
+                       (let ((char1 (read-char in nil 'eof))
+                             (char2 (read-char in nil 'eof)))
+                         (or (decode-quoted char1 char2 :error-p error-p)
+                             ;; Ignore bad soft line breaks (very common)
+                             ;; (= followed by LF).
+                             (when (eq #\Newline char1)
+                               (unread-char char2 in)
+                               nil)))
+                       ;; Non encoded char.
+                       (plain-char-code char :error-p error-p))))
+              (when decoded ; Ignore values that couldn't be decoded.
                 (write-byte decoded out)))))))
-
