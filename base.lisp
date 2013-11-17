@@ -167,7 +167,8 @@ character STREAM."
                          (or (decode-quoted char1 char2 :error-p error-p)
                              ;; Ignore bad soft line breaks (very common)
                              ;; (= followed by LF).
-                             (when (eq #\Newline char1)
+                             (when (and (eq #\Newline char1)
+                                        (not (eq 'eof char2)))
                                (unread-char char2 in)
                                nil)))
                        ;; Non encoded char.
