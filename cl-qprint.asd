@@ -27,7 +27,7 @@
   :name "CL-QPRINT"
   :description "Encode and decode quoted-printable encoded strings."
   :author "Robert Marlow <rob@bobturf.org>"
-  :version "1.0.0-rc"
+  :version "0.9.9"
   :maintainer "Max Rottenkolber <max@mr.gy>"
   :components ((:file "base")
                (:file "test" :depends-on ("base")))
