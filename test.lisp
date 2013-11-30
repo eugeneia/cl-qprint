@@ -22,21 +22,13 @@
        do (setf (aref vector i) (random *value-range*)))
     vector))
 
-(defun equal-vec (x y)
-  "Are vectors X, Y equal?"
-  (loop for a across x
-        for b across y
-     unless (= a b)
-     return nil
-     finally (return t)))
-
 (defun test-cl-qprint ()
   "Test integritiy of CL-QPRINT by asserting the following to be true:
 
-{(DECODE (ENCODE input)) ⇒ input}
+{(EQUALP (DECODE (ENCODE input)) input)}
 
 for {input} being randomized data."
   (loop for i from 0 to *test-iterations*
      for vector = (random-vector i)
      for digested-vector = (decode (encode vector) :error-p t)
-     do (assert (equal-vec vector digested-vector))))
+     do (assert (equalp vector digested-vector))))
