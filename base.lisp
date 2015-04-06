@@ -1,7 +1,7 @@
 ;;;; Encode/decode quoted-printable.
 ;;;;
 ;;;; Copyright (C) 2004 Robert Marlow <rob@bobturf.org>
-;;;; Copyright (C) 2013 Max Rottenkolber <max@mr.gy>
+;;;; Copyright (C) 2013, 2015 Max Rottenkolber <max@mr.gy>
 ;;;;
 ;;;; This library is free software; you can redistribute it and/or
 ;;;; modify it under the terms of the GNU Library General Public
@@ -20,7 +20,8 @@
 
 (defpackage cl-qprint
   (:documentation
-   "Encode and decode quoted-printable encoded strings.")
+   "Encode and decode quoted-printable encoded strings as defined by
+    [RFC 2045](http://tools.ietf.org/html/rfc2045).")
   (:use :cl
 	:flexi-streams)
   (:nicknames :qprint
@@ -90,11 +91,20 @@ encoding."
       (make-string 1 :initial-element (code-char-ascii byte))))
 
 (defun encode (input &key (columns 76))
-  "Reads from INPUT and produces a quoted-printable encoded string. Do
-not exceed line lengths of COLUMNS which defaults to the value
-recommended by RFC2045. Does *not* convert LF to CRLF but encodes all
-whitespace instead to ensure full input integrity. INPUT must be either a
-VECTOR or a STREAM with ELEMENT-TYPE of {(UNSIGNED-BYTE 8)}."
+  "*Arguments and Values:*
+
+   _input_—a _vector_ or a _stream_ with element type
+   {(unsigned-byte 8)}.
+
+   _columns_—a positive _integer_.
+
+   *Description*:
+
+   {encode} reads from _input_ and returns a _quoted-printable_ encoded
+   _string_. _Columns_ denotes the maximum line length of _string_."
+
+  ;; Does *not* convert LF to CRLF but encodes all whitespace instead to
+  ;; ensure full input integrity.
   (let ((in (etypecase input
               ;; Coerce input type.
 	      (vector (make-in-memory-input-stream input))
@@ -116,7 +126,9 @@ VECTOR or a STREAM with ELEMENT-TYPE of {(UNSIGNED-BYTE 8)}."
              (write-string encoded out))))))
 
 (define-condition decode-error (error) ()
-  (:documentation "Input to DECODE is malformed."))
+  (:documentation
+   "The _type_ {decode-error} consists of error conditions related to
+    malformed encodings."))
 
 (defun decode-byte (char2 char3)
   "Decode byte encoded by CHAR2 and CHAR2."
@@ -149,10 +161,21 @@ NIL or signal DECODE-ERROR depending on ERROR-P."
         code)))
 
 (defun decode (input &key error-p)
-  "Reads quoted-printable encoding from INPUT and produces the equivalent
-{(VECTOR (UNSIGNED-BYTE 8))}. Signals condition of type DECODE-ERROR if
-INPUT is malformed and ERROR-P is non NIL. INPUT must be a STRING or a
-character STREAM."
+  "*Arguments and Values:*
+
+   _input_—a _string_ or a _character stream_.
+
+   _error-p_—a _generalized boolean_. The default is false.
+
+   *Description*:
+
+   {decode} reads from _quoted-printable_ encoded _input_ and returns a
+   decoded _vector_ with {(unsigned-byte 8)} as its _element type_.
+
+   *Exceptional Situations:*
+
+   If _error-p_ is _true_, an error of _type_ {decode-error} signaled
+   when _input_ is malformed."
   (let ((in (etypecase input
 	      (string (make-string-input-stream input))
 	      (stream input))))
