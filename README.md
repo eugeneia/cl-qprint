@@ -9,4 +9,4 @@ bug fixes and is actively maintained.
 
 **Documentation:**
 
-* [API documentation](http://mr.gy/maintenance/cl-qprint/cl-qprint-api.html)
+* [API documentation](http://mr.gy/maintenance/cl-qprint/api.html)
